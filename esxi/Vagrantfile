@@ -1,4 +1,5 @@
 
+# non-privilaged user - vagrant
 ENV['VAGRANT_DEFAULT_PROVIDER']='vmware_esxi'
 BOX_IMAGE = "generic/ubuntu1804"
 ESXI_HOST = "10.99.120.228"
@@ -30,7 +31,19 @@ servers = [
     :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
     :mem => '1024',
     :cpu => '2'
+  },
+  {
+    :name => "node2",
+    :hostname => "node2",
+    :type => "node",
+    :box => BOX_IMAGE,
+    :public_ip => '10.99.120.242',
+    :private_ip => '192.168.1.12',
+    :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
+    :mem => '1024',
+    :cpu => '2'
   }
+
 
 ]
 
@@ -44,7 +57,7 @@ $configureNode = <<-SCRIPT
   apt-get update
   apt-get install --yes python
 SCRIPT
-
+ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
 
 Vagrant.configure('2') do |config|
   servers.each do |opts|
@@ -69,12 +82,33 @@ Vagrant.configure('2') do |config|
         esxi.esxi_disk_store = ESXI_DS
         esxi.guest_numvcpus = opts[:cpu]
       end
+      #change default route
       config.vm.provision "shell", inline: <<-SHELL
         ip route del default
         ip route add default via 10.99.120.1 dev eth1
       SHELL
+
+      #append host pub key
+      config .vm.provision "shell" do |s|    
+        s.inline = <<-SHELL
+          if grep -sq "#{ssh_pub_key}" /home/vagrant/.ssh/authorized_keys; then
+            echo 'SSH keys already provisioned'
+          else
+            echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
+          fi
+        SHELL
+      end
+
+      #node provision (type depended)
       if opts[:type] == "master"
         config.vm.provision "shell", inline: $configureMaster
+#        if needed run playbook
+#        config.vm.provision "file", source: "./share_content", destination: "$HOME"
+#        config.vm.provision "ansible_local" do |ansible|
+#          ansible.provisioning_path = "/home/vagrant"
+#          ansible.verbose = "v"
+#          ansible.playbook = "playbook.yml"
+#        end
       else
         config.vm.provision "shell", inline: $configureNode
       end
