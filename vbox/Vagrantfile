@@ -1,23 +1,17 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
 
-ENV['VAGRANT_DEFAULT_PROVIDER']='vmware_esxi'
 BOX_IMAGE = "generic/ubuntu1804"
-ESXI_HOST = "10.99.120.228"
-ESXI_LOGIN = "root"
-ESXI_PASS = "qwerty1@3456"
-ESXI_DS = "datastore1"
-PROXY = "http://10.4.68.213:3128/"
-NO_PROXY = "localhost,127.0.0.1,*.rs.ru"
-
 servers = [
   {
     :name => "master",
     :hostname => "master",
     :type => "master",
     :box => BOX_IMAGE,
-    :public_ip => '10.99.120.233',
-    :private_ip => '192.168.1.10',
-    :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
-    :mem => '1024',
+    :public_ip => '192.168.1.60',
+    :private_ip => '192.168.10.10',
+    :int_network => 'mynetwork',
+    :mem => '4096',
     :cpu => '2'
   },
   {
@@ -25,14 +19,38 @@ servers = [
     :hostname => "node1",
     :type => "node",
     :box => BOX_IMAGE,
-    :public_ip => '10.99.120.239',
-    :private_ip => '192.168.1.11',
-    :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
+    :public_ip => '192.168.1.61',
+    :private_ip => '192.168.10.11',
+    :int_network => 'mynetwork',
     :mem => '1024',
     :cpu => '2'
-  }
-
+  },
+#  {
+#    :name => "node2",
+#    :hostname => "node2",
+#    :type => "node",
+#    :box => BOX_IMAGE,
+#    :public_ip => '192.168.1.62',
+#    :private_ip => '192.168.10.12',
+#    :int_network => 'mynetwork',
+#    :mem => '1024',
+#    :cpu => '2'
+#  },
 ]
+
+$redefineDefault = <<-SHELL
+  ip route del default
+  ip route add default via 192.168.1.1 dev eth1
+SHELL
+
+ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
+$appendHostPubKey = <<-SHELL
+  if grep -sq "#{ssh_pub_key}" /home/vagrant/.ssh/authorized_keys;  then
+    echo 'SSH keys already provisioned'
+  else
+    echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
+  fi
+SHELL
 
 $configureMaster = <<-SCRIPT
   apt-get update
@@ -44,35 +62,26 @@ $configureNode = <<-SCRIPT
   apt-get update
   apt-get install --yes python
 SCRIPT
-
-
-Vagrant.configure('2') do |config|
+ 
+Vagrant.configure("2") do |config|
   servers.each do |opts|
     config.vm.define opts[:name] do |config|
-      if Vagrant.has_plugin?("vagrant-proxyconf")
-        config.proxy.http     = PROXY
-        config.proxy.https    = PROXY
-        config.proxy.no_proxy = NO_PROXY
-      end
       config.vm.box = BOX_IMAGE
       config.vm.hostname = opts[:hostname]
-      config.vm.synced_folder('.', '/vagrant', type: 'nfs', disabled: true)
-      config.vm.network 'public_network', ip: opts[:public_ip]
-      config.vm.network 'private_network', ip: opts[:private_ip]
-      config.vm.provider :vmware_esxi do |esxi|
-        esxi.guest_name = opts[:name]
-        esxi.guest_memsize = opts[:mem]
-        esxi.esxi_virtual_network = opts[:networks]
-        esxi.esxi_hostname = ESXI_HOST
-        esxi.esxi_username = ESXI_LOGIN
-        esxi.esxi_password = ESXI_PASS
-        esxi.esxi_disk_store = ESXI_DS
-        esxi.guest_numvcpus = opts[:cpu]
+      config.vm.synced_folder './', '/vagrant_share'
+      config.vm.network 'public_network', ip: opts[:public_ip], bridge: "wlx3497f6632b9b"
+      config.vm.network 'private_network', ip: opts[:private_ip],
+        virtualbox__intnet: opts[:int_network]
+      config.vm.provider "virtualbox" do |v|
+        v.name = opts[:name]
+        v.memory = opts[:mem]
+        v.cpus = opts[:cpu]
       end
-      config.vm.provision "shell", inline: <<-SHELL
-        ip route del default
-        ip route add default via 10.99.120.1 dev eth1
-      SHELL
+      #change default route
+      config.vm.provision "shell", inline: $redefineDefault
+      #append host's publica key
+      config.vm.provision "shell", inline: $appendHostPubKey
+      #node provision (type depended)
       if opts[:type] == "master"
         config.vm.provision "shell", inline: $configureMaster
       else
