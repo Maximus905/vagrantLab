@@ -52,10 +52,12 @@ $configureMaster = <<-SCRIPT
   apt-get install software-properties-common
   apt-add-repository --yes --update ppa:ansible/ansible
   apt-get install --yes ansible
+  apt-get install --yes python-apt
 SCRIPT
 $configureNode = <<-SCRIPT
   apt-get update
   apt-get install --yes python
+  apt-get install --yes python-apt
 SCRIPT
 ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
 
