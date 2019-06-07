@@ -7,7 +7,7 @@ ESXI_LOGIN = "root"
 ESXI_PASS = "qwerty1@3456"
 ESXI_DS = "datastore1"
 PROXY = "http://10.4.68.213:3128/"
-NO_PROXY = "localhost,127.0.0.1,*.rs.ru"
+NO_PROXY = "localhost,127.0.0.1,*.rs.ru,192.168.0.0/16,10.0.0.0/8"
 
 servers = [
   {
@@ -16,10 +16,12 @@ servers = [
     :type => "master",
     :box => BOX_IMAGE,
     :public_ip => '10.99.120.233',
+    :public_ip_mask => '255.255.255.0',
     :private_ip => '192.168.1.10',
+    :private_ip_mask => '255.255.255.0',
     :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
-    :mem => '1024',
-    :cpu => '2'
+    :mem => '4096',
+    :cpu => '4'
   },
   {
     :name => "node1",
@@ -27,9 +29,11 @@ servers = [
     :type => "node",
     :box => BOX_IMAGE,
     :public_ip => '10.99.120.239',
+    :public_ip_mask => '255.255.255.0',
     :private_ip => '192.168.1.11',
+    :private_ip_mask => '255.255.255.0',
     :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
-    :mem => '1024',
+    :mem => '2048',
     :cpu => '2'
   },
   {
@@ -38,9 +42,11 @@ servers = [
     :type => "node",
     :box => BOX_IMAGE,
     :public_ip => '10.99.120.242',
+    :public_ip_mask => '255.255.255.0',
     :private_ip => '192.168.1.12',
+    :private_ip_mask => '255.255.255.0',
     :networks => ['VM Network', 'VM Network', 'InternalNetwork'],
-    :mem => '1024',
+    :mem => '2048',
     :cpu => '2'
   }
 
@@ -72,8 +78,8 @@ Vagrant.configure('2') do |config|
       config.vm.box = BOX_IMAGE
       config.vm.hostname = opts[:hostname]
       config.vm.synced_folder('.', '/vagrant', type: 'nfs', disabled: true)
-      config.vm.network 'public_network', ip: opts[:public_ip]
-      config.vm.network 'private_network', ip: opts[:private_ip]
+      config.vm.network 'public_network', ip: opts[:public_ip], netmask: opts[:public_ip_netmask]
+      config.vm.network 'private_network', ip: opts[:private_ip], netmask: opts[:private_ip_netmask]
       config.vm.provider :vmware_esxi do |esxi|
         esxi.guest_name = opts[:name]
         esxi.guest_memsize = opts[:mem]
@@ -83,6 +89,7 @@ Vagrant.configure('2') do |config|
         esxi.esxi_password = ESXI_PASS
         esxi.esxi_disk_store = ESXI_DS
         esxi.guest_numvcpus = opts[:cpu]
+        esxi.guest_custom_vmx_settings = [['vhv.enable','TRUE']]
       end
       #change default route
       config.vm.provision "shell", inline: <<-SHELL
