@@ -25,23 +25,20 @@ servers = [
     :mem => '1024',
     :cpu => '2'
   },
-#  {
-#    :name => "node2",
-#    :hostname => "node2",
-#    :type => "node",
-#    :box => BOX_IMAGE,
-#    :public_ip => '192.168.1.62',
-#    :private_ip => '192.168.10.12',
-#    :int_network => 'mynetwork',
-#    :mem => '1024',
-#    :cpu => '2'
-#  },
+  {
+    :name => "node2",
+    :hostname => "node2",
+    :type => "node",
+    :box => BOX_IMAGE,
+    :public_ip => '192.168.1.62',
+    :public_ip_mask => '255.255.255.0',
+    :private_ip => '192.168.10.12',
+    :private_ip_mask => '255.255.255.0',
+    :private_network => 'mynetwork',
+    :mem => '1024',
+    :cpu => '2'
+  },
 ]
-
-$redefineDefault = <<-SHELL
-  ip route del default
-  ip route add default via 192.168.1.1 dev eth1
-SHELL
 
 ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
 $appendHostPubKey = <<-SHELL
@@ -53,11 +50,12 @@ $appendHostPubKey = <<-SHELL
 SHELL
 
 $configureMaster = <<-SCRIPT
-  apt-get update
-  apt-get install software-properties-common
-  apt-add-repository --yes --update ppa:ansible/ansible
-  apt-get install --yes ansible
-  apt-get install --yes python-apt
+apt-get update
+apt-get install software-properties-common
+apt-get install --yes python-apt
+apt-get install --yes python
+apt-add-repository --yes --update ppa:ansible/ansible
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ansible
 SCRIPT
 $configureNode = <<-SCRIPT
   apt-get update
@@ -73,15 +71,19 @@ Vagrant.configure("2") do |config|
       config.vm.synced_folder './', '/vagrant_share'
       config.vm.network 'public_network', ip: opts[:public_ip], bridge: "wlx3497f6632b9b"
       config.vm.network 'private_network', ip: opts[:private_ip],
-        virtualbox__intnet: opts[:int_network]
+        virtualbox__intnet: opts[:private_network]
       config.vm.provider "virtualbox" do |v|
         v.name = opts[:name]
         v.memory = opts[:mem]
         v.cpus = opts[:cpu]
       end
       #change default route
-      config.vm.provision "shell", inline: $redefineDefault
-      #append host's publica key
+#      config.vm.provision "shell", inline: <<-SHELL
+#        ip route del default
+#        ip route add default via 10.99.120.1 dev eth1
+#      SHELL
+
+      #append host's public key
       config.vm.provision "shell", inline: $appendHostPubKey
       #node provision (type depended)
       if opts[:type] == "master"
